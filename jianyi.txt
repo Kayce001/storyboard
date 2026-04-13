@@ -1,0 +1,182 @@
+**结论**
+
+如果目标是“效果明显提升”，我不建议把整个项目“直接改成只有 `LivePortrait`”。更好的完整方案是：
+
+- 保留你现在这条“文案清洗 -> TTS -> 分镜 -> 合成”的生产线骨架。
+- 把当前这个“静态头像浮动叠加”模块，升级成真正的“说话数字人引擎”。
+- 其中 `LivePortrait` 可以用，但更适合做“表情/姿态驱动”和高自然度动画，不适合单独承担“纯音频直驱讲解员”这件事。
+
+你现在的主流程在 [scripts/make_video.py](/e:/xuanchuan/scripts/make_video.py:408)，`avatar` 模式只是把一张图叠上去，在 [scripts/make_video.py](/e:/xuanchuan/scripts/make_video.py:230) 和 [scripts/make_video.py](/e:/xuanchuan/scripts/make_video.py:528) 都能看出来。这也是我判断“效果不满意”主要不是调参数能解决，而是架构需要换的原因。
+
+**推荐方案**
+
+我建议做成“效果优先”的混合架构：
+
+- 讲解员主引擎：优先接 `MuseTalk 1.5`
+- 姿态/表情增强：可选接 `LivePortrait`
+- 现有项目继续负责：文案清洗、TTS、分段、字幕、封面、素材图、最终合成
+
+原因很直接：
+
+- `LivePortrait` 官方定位是 `source + driving video/.pkl template` 的 portrait animation，官方 README 也明确是 `-s` 源图/源视频、`-d` 驱动视频或模板，不是纯音频驱动。官方环境推荐也是 `Python 3.10`，Windows 可用，但对 CUDA 版本比较敏感。
+- `MuseTalk 1.5` 官方定位就是 audio-driven lip-sync，适合“输入音频，让一个头像开口说话”。
+- `Hallo2` 质量很强，但官方 README 更偏 Ubuntu + CUDA 11.8 + A100，而且推理输入对英文更友好，不适合你这个 Windows + 中文讲解项目作为第一落点。
+
+所以完整技术路线我会这样定：
+
+1. 先把当前项目拆成稳定的阶段式流水线，但不改变最终输出契约。
+2. 引入 `AvatarEngine` 抽象层，把“讲解员生成”从 [scripts/make_video.py](/e:/xuanchuan/scripts/make_video.py:408) 里独立出来。
+3. 第一优先级接入 `MuseTalk` 生成“说话人像视频”。
+4. 第二优先级把 `LivePortrait` 作为补充：
+   - 做更自然的 idle 动作
+   - 做封面/转场里的头部姿态和表情动画
+   - 做不同讲解风格的 motion template
+5. 最后再升级画面设计和素材质量，因为你现在的图片源也偏弱，[scripts/providers/image_provider.py](/e:/xuanchuan/scripts/providers/image_provider.py:1) 里主要还是 `pollinations` 和 placeholder，这本身也在拖效果后腿。
+
+**完整改造蓝图**
+
+建议把项目改成这 6 个阶段：
+
+- `stage_01_script`
+  - 输入原文
+  - 输出 `cleaned_script`、`tts_script`、`segments.json`、`storyboard.json`
+- `stage_02_voice`
+  - 输入 `tts_script`
+  - 输出高质量旁白音频、可选字级时间戳
+- `stage_03_visual_assets`
+  - 输入 `storyboard`
+  - 输出分镜底图、背景、贴图、封面素材
+- `stage_04_avatar`
+  - 输入讲解员源图/源视频 + 音频/驱动模板
+  - 输出透明背景或纯色视频的“讲解员视频”
+- `stage_05_scene_compose`
+  - 把分镜、字幕、讲解员、转场、BGM 合成
+- `stage_06_qc_and_manifest`
+  - 输出 `run_summary.json`、缓存索引、重跑所需清单
+
+建议新增一个统一清单文件，例如 `run_manifest.json`，把一次生成的所有中间产物路径都记下来，这样后续替换模型不会再把主流程搅乱。
+
+**Avatar 部分怎么设计**
+
+这里是最关键的。
+
+建议定义统一接口：
+
+- `render_avatar(source, audio, mode, options) -> avatar_video`
+
+然后支持 3 个实现：
+
+- `static_overlay`
+  - 兼容当前方案，作为保底回退
+- `musetalk`
+  - 默认主方案
+  - 负责“音频驱动开口说话”
+- `liveportrait`
+  - 负责“驱动模板/表情姿态动画”
+  - 不默认单独承担全程讲解
+
+如果你坚持要“以 `LivePortrait` 为核心”，可行方案也有，但我会把它定义成 `LivePortrait-template mode`：
+
+- 先录一组高质量驱动视频模板
+  - 平静讲解
+  - 稍微强调
+  - 点头/抬眉
+  - 强调结尾
+- 每个分段根据文案类型和语音强弱选一个模板
+- 用 `LivePortrait` 生成每段讲解员动画
+- 最后把 TTS 音频拼回去
+
+这个方案能比现在自然很多，但缺点也很明显：
+
+- 嘴型不是严格音频对齐
+- 需要做模板库
+- 分段越长，口型违和越容易暴露
+
+所以如果你问我“效果好”的优先级排序，我会给：
+
+1. `MuseTalk` 做说话
+2. `LivePortrait` 做姿态/表情增强
+3. `LivePortrait only` 作为备选，不是首选
+
+**视觉层也要一起升级**
+
+只换数字人还不够。你现在的视频观感还会被这几个点拉低：
+
+- 分镜图质量不稳定
+- 文案面板样式比较工具化
+- 封面和讲解员没有统一视觉语言
+- 讲解员只是悬浮在右下角，没有真正参与画面叙事
+
+所以建议同步改：
+
+- 讲解员布局从“右下角贴片”升级成“主持人版式”
+  - 25% 到 35% 画面占比
+  - 背景加柔化、边缘光、阴影、品牌色描边
+- 字幕改成双层
+  - 底部逐句字幕
+  - 画面内保留短标题，不再整段大面板压图
+- 分镜图改成两档来源
+  - 优先高质量生成/人工素材
+  - 不再用 placeholder 兜底作为正式成片
+- 转场改成轻动态
+  - 缩放、平移、擦除、景深，不用简单硬切
+- 封面单独设计
+  - 不从正文里顺手拼
+
+**环境与部署方案**
+
+这一块要提前定，不然后面会很乱。
+
+建议不要把新模型直接塞进当前 `.venv`。你现在本地是 `Python 3.13.2`，而 `LivePortrait` 官方明确推荐 `Python 3.10`，`MuseTalk` 官方也推荐 `Python 3.10`。
+
+建议拆成：
+
+- `app env`
+  - 保留当前项目主控环境
+- `avatar-liveportrait env`
+  - 单独跑 `LivePortrait`
+- `avatar-musetalk env`
+  - 单独跑 `MuseTalk`
+
+主项目通过 subprocess 调这两个子环境，只通过文件交换：
+
+- 输入：源图、音频、配置 json
+- 输出：`avatar.mp4`、日志、耗时、错误信息
+
+这样以后你要换模型，不需要再动主流程核心。
+
+**实施顺序**
+
+我建议按这个顺序做，性价比最高：
+
+1. 先重构项目结构，不换模型
+   - 把 `make_video.py` 拆成阶段模块
+   - 加 manifest 和缓存
+2. 再做 `AvatarEngine` 抽象
+   - 先把当前静态头像方案挂进去，保证兼容
+3. 接 `MuseTalk`，拿到第一版真正说话的讲解员
+4. 再接 `LivePortrait`
+   - 做姿态模板
+   - 做 idle 动作或封面动效
+5. 最后做视觉升级
+   - 字幕、版式、封面、转场、配色统一
+
+**我对这次改造的建议落点**
+
+如果你愿意大改，而且目标明确是“成片效果更好”，我的建议不是“把项目替换为 `LivePortrait`”，而是：
+
+- 项目主架构保留
+- 讲解员模块重做
+- `MuseTalk` 作为主说话引擎
+- `LivePortrait` 作为高自然度动作增强模块
+
+这会比“全盘 LivePortrait 化”更稳，也更符合你现在这个宣传片项目的生产方式。
+
+参考：
+- LivePortrait 官方仓库: https://github.com/KwaiVGI/LivePortrait
+- LivePortrait README（2025-06-01 更新、Python 3.10、`source + driving`）: https://raw.githubusercontent.com/KwaiVGI/LivePortrait/main/readme.md
+- LivePortrait 参数定义（`source` / `driving`）: https://raw.githubusercontent.com/KwaiVGI/LivePortrait/main/src/config/argument_config.py
+- MuseTalk 官方仓库说明（audio-driven lip-sync、Python 3.10）: https://raw.githubusercontent.com/TMElyralab/MuseTalk/main/README.md
+- Hallo2 官方仓库说明（Ubuntu/CUDA 11.8/A100、英文输入约束）: https://raw.githubusercontent.com/fudan-generative-vision/hallo2/main/README.md
+
+如果你想继续，我下一步可以直接给你写一份“项目改造设计文档 v1”，按目录结构、模块职责、CLI 参数、缓存策略、模型环境隔离来落到可执行层。
