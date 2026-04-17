@@ -1,5 +1,6 @@
 .venv/
-.venv-musetalk/
+.venv-linux/
+.venv-storyboard/
 __pycache__/
 *.pyc
 *.mp4
@@ -9,28 +10,14 @@ __pycache__/
 third_party/
 wheels/
 
-output/audio/
-output/video/
-output/tmp/
-output/*test*/
-output/*.mp4
-output/*.mp3
-output/*.wav
-output/*.png
-output/*.jpg
-output/*.jpeg
-output/**
-!output/
-!output/nano_banana_prompt_pack_1.md
+output/runs/
+output/workbench/
+
+assets/music/
 
 .claude/
 .claude-plugin/
-music/
 .env
-avatar_source.jpg
-boy.jpg
-girl18.png
-girl24.jpg
-touminggirl.jpg
-zhengmiangirl.jpg
-龙虾.jpg
+# Local task assets stay out of the public repo
+tasks/*
+!tasks/README.md

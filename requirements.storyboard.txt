@@ -1,0 +1,10 @@
+# Core runtime dependencies for the current storyboard-only pipeline.
+# System requirement: FFmpeg must be available on PATH, or install
+# imageio-ffmpeg below to provide a bundled executable fallback.
+
+numpy>=2.0
+opencv-python>=4.10
+Pillow>=10.0
+mutagen>=1.47
+edge-tts>=7.0
+imageio-ffmpeg>=0.6

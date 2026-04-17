@@ -5,28 +5,47 @@
       "api_style": "openai",
       "base_url": "https://openrouter.ai/api",
       "api_key_env": "OPENROUTER_API_KEY",
-      "model": "moonshotai/kimi-k2",
-      "max_tokens": 4000,
+      "model": "z-ai/glm-4.5-air:free",
+      "fallback_models": [
+        "deepseek/deepseek-chat-v3-0324"
+      ],
+      "max_tokens": 8000,
       "temperature": 0.2
     }
   },
+  "prompt_pack": {
+    "parallel_frame_writer": {
+      "enabled": false
+    }
+  },
   "tts": {
-    "provider_order": ["edge_tts", "pyttsx3", "gtts"],
+    "provider_order": ["edge_tts_wsl", "edge_tts"],
+    "edge_tts_wsl": {
+      "enabled": true,
+      "wsl_exe": "wsl.exe",
+      "edge_tts_cli": ".venv-linux/bin/edge-tts",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+0%",
+      "timeout_sec": 180
+    },
     "edge_tts": {
       "voice": "zh-CN-XiaoxiaoNeural",
       "rate": "+0%"
-    },
-    "gtts": {
-      "lang": "zh-cn",
-      "tld": "com"
-    },
-    "pyttsx3": {
-      "rate": 180,
-      "voice_contains": "zh"
     }
   },
   "image": {
-    "provider_order": ["pollinations", "local_placeholder"],
+    "auto_generate_enabled": false,
+    "provider_order": ["openrouter_gemini_image", "pollinations", "local_placeholder"],
+    "openrouter_gemini_image": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "model": "google/gemini-2.5-flash-image",
+      "aspect_ratio": "16:9",
+      "max_tokens": 2048,
+      "retries": 3,
+      "prompt_prefix": "Create a clean storyboard frame for a knowledge explainer video.",
+      "prompt_suffix": "Prefer a teaching illustration, whiteboard-style explainer scene, or structured visual diagram instead of a poster, cover art, or promo image. No title cards, no readable text, no watermarks, no logos, no fake interface text. Do not turn metaphors into literal toys or mascots unless the prompt explicitly requires that."
+    },
     "pollinations": {
       "width": 1280,
       "height": 720,
@@ -51,11 +70,11 @@
     "audio_bitrate": "192k",
     "video_crf": 20,
     "min_segment_sec": 3.0,
-    "subtitle_mode": "none"
+    "subtitle_mode": "none",
+    "segment_audio_padding_sec": 0.35
   },
   "layout": {
-    "style": "fullscreen_host_no_text",
-    "host_background_image": "beijing.jpg",
+    "style": "storyboard_compact_label",
     "text_panel_width_ratio": 0.58,
     "panel_margin_left": 56,
     "panel_margin_top": 74,
@@ -68,51 +87,7 @@
     "screen_text_max_chars_per_line": 14,
     "screen_text_max_lines": 2,
     "panel_hint_text": "",
-    "avatar_width_ratio": 0.30,
-    "avatar_height_ratio": 0.82,
-    "avatar_corner_radius": 36,
-    "avatar_margin_right": 42,
-    "avatar_float_px": 6,
-    "center_avatar_width_ratio": 0.36,
-    "center_avatar_height_ratio": 0.74,
-    "avatar_top_margin": 24,
-    "bottom_text_height": 188
-  },
-  "avatar": {
-    "mode": "pipeline",
-    "engine_order": ["musetalk", "liveportrait_then_musetalk", "static_image"],
-    "engine_fallback": "static_image",
-    "download_policy": {
-      "retry_per_source": 2,
-      "hf_endpoint_fallback": "https://hf-mirror.com"
-    },
-    "liveportrait": {
-      "enabled": true,
-      "repo_dir": "third_party/LivePortrait/LivePortrait-main/LivePortrait-main",
-      "python_executable": ".venv/Scripts/python.exe",
-      "driving_path": "third_party/LivePortrait/LivePortrait-main/LivePortrait-main/assets/examples/driving/d0.mp4",
-      "output_subdir": "liveportrait",
-      "extra_args": [
-        "--driving_multiplier",
-        "1.0",
-        "--animation_region",
-        "all"
-      ]
-    },
-    "musetalk": {
-      "enabled": true,
-      "repo_dir": "third_party/MuseTalk",
-      "python_executable": ".venv-musetalk/Scripts/python.exe",
-      "output_subdir": "musetalk",
-      "version": "v15",
-      "ffmpeg_path": ".venv/Scripts",
-      "batch_size": 4,
-      "fps": 25,
-      "use_float16": true,
-      "inference_config": "",
-      "unet_model_path": "",
-      "unet_config_path": "",
-      "whisper_dir": ""
-    }
+    "bottom_text_height": 188,
+    "compact_label_bottom_margin": 92
   }
 }
