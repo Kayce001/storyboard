@@ -110,7 +110,13 @@ def _build_api_url(base_url: str, path: str) -> str:
     return f"{base}/v1/{path}"
 
 
-def _post_json_with_retry(url: str, payload: dict, api_key: str, anthropic: bool, retries: int = 3) -> dict:
+def _post_json_with_retry(
+    url: str,
+    payload: dict,
+    api_key: str,
+    anthropic: bool,
+    retries: int = 3,
+) -> dict:
     last_error = None
     for i in range(retries):
         try:

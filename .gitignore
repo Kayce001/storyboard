@@ -17,7 +17,6 @@ assets/music/
 
 .claude/
 .claude-plugin/
+.codex/
 .env
-# Local task assets stay out of the public repo
-tasks/*
-!tasks/README.md
+output/

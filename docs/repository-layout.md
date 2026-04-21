@@ -8,6 +8,7 @@
   Command reference files used by the local workflow.
 - `config/`
   Runtime configuration such as provider, layout, and video settings.
+  Text, image, TTS, layout, and video defaults all live in `config/providers.json`.
 - `docs/`
   Long-form project notes, environment setup, planning documents, and architecture references.
 - `examples/`
@@ -16,6 +17,10 @@
   Generated outputs only.
 - `scripts/`
   Backward-compatible entry scripts.
+  Includes the Python entry points plus WSL convenience wrappers such as:
+  `scripts/run_prompt_pack_wsl.sh`
+  `scripts/run_make_video_wsl.sh`
+  `scripts/run_full_pipeline_wsl.sh`
 - `skills/`
   Skill instructions for storyboard generation and finishing workflows.
   These are collaboration assets for Codex or human operators, not runtime dependencies. Deleting `skills/` does not stop the command-line pipeline from running.
@@ -34,6 +39,18 @@
   Task-scoped scratch outputs and reusable generated helpers.
   Recommended shape: `output/workbench/<task_name>/...`
   If a prompt pack must be rebuilt, rebuild it from the raw task text such as `tasks/<name>.txt`, not from `output/runs/<name>/segments_*.json`.
+
+## WSL wrappers
+
+- `scripts/run_prompt_pack_wsl.sh`
+  WSL wrapper for `scripts/rebuild_prompt_pack.py`.
+  Accepts either `tasks/<name>.txt` or a short task id like `4`.
+- `scripts/run_make_video_wsl.sh`
+  WSL wrapper for `scripts/make_video.py`.
+  Automatically reuses `tasks/<name>/` as storyboard images and `output/workbench/<name>/prompt_pack.md` when they exist.
+- `scripts/run_full_pipeline_wsl.sh`
+  WSL wrapper for `scripts/run_full_pipeline.py`.
+  Runs the end-to-end `txt -> prompt pack -> auto image generation -> video` flow from the WSL runtime.
 
 ## Example inputs
 

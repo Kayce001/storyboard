@@ -6,7 +6,7 @@
 
 当前推荐的迁移目标是：
 
-- 代码目录暂时继续放在 `/path/to/xuanchuan`
+- 代码目录暂时继续放在 `/path/to/storyboard`
 - 主执行环境迁到 WSL
 - `rebuild_prompt_pack.py`、`make_video.py`、`build_intro_outro_assets.py` 都能在 WSL 直接运行
 - 只修改真正的 Windows 平台耦合点，不大面积替换正常相对路径
@@ -15,14 +15,14 @@
 
 截至 2026-04-16，第一阶段已经在当前机器上完成验证：
 
-- `/path/to/xuanchuan/.venv-linux` 已创建并可用
+- `/path/to/storyboard/.venv-linux` 已创建并可用
 - `rebuild_prompt_pack.py` 已能在 WSL 中直接运行
 - `make_video.py` 已能在 WSL 中直接生成成片
 - `make_video.py` 与 `build_intro_outro_assets.py` 在 WSL 下会自动跳过 `edge_tts_wsl`，直接使用 `.venv-linux` 里的本地 `edge_tts`
 
 ## 不要先做的事
 
-- 不要先把全项目路径硬改成 `/path/to/xuanchuan`
+- 不要先把全项目路径硬改成 `/path/to/storyboard`
 - 不要先把仓库整体迁到 `~/projects/...`
 - 不要同时大改主链路逻辑和平台适配逻辑
 - 不要先删除所有 Windows 兼容代码
@@ -34,7 +34,7 @@
 在 WSL 中执行：
 
 ```bash
-cd /path/to/xuanchuan
+cd /path/to/storyboard
 python3 -m venv .venv-linux
 source .venv-linux/bin/activate
 python -m pip install --upgrade pip
@@ -76,7 +76,7 @@ python --version
 建议命令：
 
 ```bash
-cd /path/to/xuanchuan
+cd /path/to/storyboard
 source .venv-linux/bin/activate
 python -m py_compile scripts/rebuild_prompt_pack.py scripts/make_video.py scripts/build_intro_outro_assets.py
 python scripts/rebuild_prompt_pack.py --input-file tasks/4.txt --config config/providers.json
@@ -108,7 +108,7 @@ python scripts/make_video.py --input-file tasks/4.txt --config config/providers.
 
 现在 `edge_tts_wsl` 本质上是：
 
-- Windows Python -> `wsl.exe` -> `/path/to/xuanchuan/.venv-linux/bin/edge-tts`
+- Windows Python -> `wsl.exe` -> `<repo-root>/.venv-linux/bin/edge-tts`
 
 如果主运行环境迁到 WSL，这条逻辑就应该进一步简化成：
 
@@ -149,7 +149,7 @@ python scripts/make_video.py --input-file tasks/4.txt --config config/providers.
 文档和命令示例建议统一写成：
 
 ```bash
-cd /path/to/xuanchuan
+cd /path/to/storyboard
 source .venv-linux/bin/activate
 python scripts/rebuild_prompt_pack.py --input-file tasks/4.txt --config config/providers.json
 python scripts/make_video.py --input-file tasks/4.txt --config config/providers.json --storyboard-image-dir tasks/4 --prompt-pack-file output/workbench/4/prompt_pack.md --subtitle-mode burn
@@ -163,7 +163,7 @@ python scripts/make_video.py --input-file tasks/4.txt --config config/providers.
 
 - `~/projects/xuanchuan`
 
-在此之前，优先确保 `/path/to/xuanchuan` 这套运行方式已经稳定。
+在此之前，优先确保 `/path/to/storyboard` 这套运行方式已经稳定。
 
 ## 推荐实施顺序
 
@@ -185,7 +185,7 @@ python scripts/make_video.py --input-file tasks/4.txt --config config/providers.
 - `make_video.py` 能在 WSL 中直接生成成片
 - TTS 不再依赖 Windows Python 反调 WSL
 - ffmpeg、字幕、音频、视频链路都能在 WSL 中完成
-- 项目主命令可以全部在 `/path/to/xuanchuan` 下完成
+- 项目主命令可以全部在 `/path/to/storyboard` 下完成
 
 ## 一句话原则
 

@@ -3,7 +3,7 @@
 ## Current baseline
 
 - Preferred project environment: `.venv-linux`
-- Preferred Python interpreter: `/path/to/xuanchuan/.venv-linux/bin/python`
+- Preferred Python interpreter: `<repo-root>/.venv-linux/bin/python`
 - Current project direction: storyboard-only pipeline
 - Legacy `.venv` has been removed from the current workspace
 
@@ -34,7 +34,7 @@ If you plan to move the main execution path into WSL, use the dedicated checklis
 ### 1. Create a clean environment
 
 ```bash
-cd /path/to/xuanchuan
+cd /path/to/storyboard
 python3 -m venv .venv-linux
 source .venv-linux/bin/activate
 python -m pip install --upgrade pip
@@ -44,7 +44,7 @@ python -m pip install -r requirements.storyboard.txt
 ### 2. Smoke test imports
 
 ```bash
-cd /path/to/xuanchuan
+cd /path/to/storyboard
 source .venv-linux/bin/activate
 python -c "import numpy, cv2, PIL, mutagen, edge_tts, imageio_ffmpeg; print('core imports ok')"
 ```
@@ -52,7 +52,7 @@ python -c "import numpy, cv2, PIL, mutagen, edge_tts, imageio_ffmpeg; print('cor
 ### 3. Smoke test scripts
 
 ```bash
-cd /path/to/xuanchuan
+cd /path/to/storyboard
 source .venv-linux/bin/activate
 python -m py_compile scripts/rebuild_prompt_pack.py scripts/make_video.py scripts/build_intro_outro_assets.py src/storyboard_video/providers/llm_cleaner.py src/storyboard_video/providers/tts_provider.py
 ```
@@ -60,7 +60,7 @@ python -m py_compile scripts/rebuild_prompt_pack.py scripts/make_video.py script
 ### 4. Run one real sample
 
 ```bash
-cd /path/to/xuanchuan
+cd /path/to/storyboard
 source .venv-linux/bin/activate
 python scripts/make_video.py --input-file examples/raw_scripts/sample_script_01.txt --config config/providers.json --output-dir output/runs/storyboard_env_smoke --storyboard-image-dir examples/storyboards/sample_storyboard_01
 ```
@@ -133,19 +133,19 @@ Why WSL is preferred:
 Current WSL TTS environment:
 
 - Shared WSL environment: `.venv-linux`
-- WSL path: `/path/to/xuanchuan/.venv-linux`
-- CLI path used by `edge_tts_wsl`: `/path/to/xuanchuan/.venv-linux/bin/edge-tts`
+- WSL path: `<repo-root>/.venv-linux`
+- CLI path used by `edge_tts_wsl`: `<repo-root>/.venv-linux/bin/edge-tts`
 
 If the WSL TTS environment needs to be recreated:
 
 ```powershell
-wsl.exe sh -lc "cd /path/to/xuanchuan && python3 -m venv .venv-linux && ./.venv-linux/bin/python -m pip install --upgrade pip && ./.venv-linux/bin/python -m pip install -r requirements.storyboard.txt"
+wsl.exe sh -lc "cd /path/to/storyboard && python3 -m venv .venv-linux && ./.venv-linux/bin/python -m pip install --upgrade pip && ./.venv-linux/bin/python -m pip install -r requirements.storyboard.txt"
 ```
 
 Smoke test:
 
 ```powershell
-wsl.exe sh -lc "/path/to/xuanchuan/.venv-linux/bin/edge-tts --voice zh-CN-XiaoxiaoNeural --text '你好，这是 WSL 语音测试。' --write-media /path/to/xuanchuan/output/workbench/wsl_tts_smoke.mp3"
+wsl.exe sh -lc "<repo-root>/.venv-linux/bin/edge-tts --voice zh-CN-XiaoxiaoNeural --text '你好，这是 WSL 语音测试。' --write-media /path/to/storyboard/output/workbench/wsl_tts_smoke.mp3"
 ```
 
 ## Repository layout

@@ -13,7 +13,7 @@
 Run:
 
 ```bash
-cd /path/to/xuanchuan
+cd /path/to/storyboard
 source .venv-linux/bin/activate
 python scripts/make_video.py --input-file tasks/<name>.txt --config config/providers.json
 ```

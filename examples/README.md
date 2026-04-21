@@ -6,7 +6,7 @@
 Recommended local smoke path:
 
 ```bash
-cd /path/to/xuanchuan
+cd /path/to/storyboard
 source .venv-linux/bin/activate
 python scripts/make_video.py --input-file examples/raw_scripts/sample_script_01.txt --config config/providers.json --output-dir output/runs/storyboard_examples_smoke --storyboard-image-dir examples/storyboards/sample_storyboard_01
 ```
