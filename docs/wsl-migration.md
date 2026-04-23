@@ -60,7 +60,7 @@ python --version
 
 确保这些变量在 WSL 进程中可见：
 
-- `OPENROUTER_API_KEY`
+- `OPENAI_API_KEY`
 
 建议不要依赖 Windows 用户级环境变量自动透传，最好在 WSL shell 中显式设置。
 

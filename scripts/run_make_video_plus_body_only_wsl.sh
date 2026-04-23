@@ -9,13 +9,11 @@ VENV_ACTIVATE="${PROJECT_ROOT}/.venv-linux/bin/activate"
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/run_make_video_wsl.sh <task-id|input-file> [extra args...]
+  bash scripts/run_make_video_plus_body_only_wsl.sh <task-id|input-file> [extra args...]
 
 Examples:
-  bash scripts/run_make_video_wsl.sh 4
-  bash scripts/run_make_video_wsl.sh tasks/4.txt
-  bash scripts/run_make_video_wsl.sh 4 --subtitle-mode burn
-  bash scripts/run_make_video_wsl.sh 4 --output-dir output/runs/manual_4
+  bash scripts/run_make_video_plus_body_only_wsl.sh 10
+  bash scripts/run_make_video_plus_body_only_wsl.sh tasks_plus/10/10.txt
 EOF
 }
 
@@ -25,8 +23,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 if [[ ! -f "${VENV_ACTIVATE}" ]]; then
-  echo "Missing WSL virtualenv: ${VENV_ACTIVATE}" >&2
-  echo "Create it first with: python3 -m venv .venv-linux && source .venv-linux/bin/activate && pip install -r requirements.storyboard.txt" >&2
+  echo "Missing Ubuntu virtualenv: ${VENV_ACTIVATE}" >&2
   exit 1
 fi
 
@@ -43,8 +40,20 @@ resolve_input_file() {
     printf '%s\n' "${PROJECT_ROOT}/${candidate}"
     return 0
   fi
+  if [[ "${candidate}" != *.txt && -f "${PROJECT_ROOT}/tasks_plus/${candidate}/${candidate}.txt" ]]; then
+    printf '%s\n' "${PROJECT_ROOT}/tasks_plus/${candidate}/${candidate}.txt"
+    return 0
+  fi
+  if [[ "${candidate}" != *.txt && -f "${PROJECT_ROOT}/tasks_plus/${candidate}.txt" ]]; then
+    printf '%s\n' "${PROJECT_ROOT}/tasks_plus/${candidate}.txt"
+    return 0
+  fi
   if [[ "${candidate}" != *.txt && -f "${PROJECT_ROOT}/tasks/${candidate}.txt" ]]; then
     printf '%s\n' "${PROJECT_ROOT}/tasks/${candidate}.txt"
+    return 0
+  fi
+  if [[ "${candidate}" != *.txt && -f "${PROJECT_ROOT}/tasks/${candidate}/${candidate}.txt" ]]; then
+    printf '%s\n' "${PROJECT_ROOT}/tasks/${candidate}/${candidate}.txt"
     return 0
   fi
   return 1
@@ -52,13 +61,8 @@ resolve_input_file() {
 
 if ! input_file="$(resolve_input_file "${input_arg}")"; then
   echo "Input file not found for argument: ${input_arg}" >&2
-  echo "Expected an existing .txt file or a task id like '4' -> tasks/4.txt" >&2
   exit 1
 fi
-
-task_name="$(basename "${input_file}" .txt)"
-storyboard_dir="${PROJECT_ROOT}/tasks/${task_name}"
-prompt_pack_file="${PROJECT_ROOT}/output/workbench/${task_name}/prompt_pack.md"
 
 cd "${PROJECT_ROOT}"
 if [[ -f "${HOME}/.bashrc" ]]; then
@@ -79,27 +83,8 @@ if [[ -n "${nvidia_libs}" ]]; then
   export LD_LIBRARY_PATH="${nvidia_libs}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 fi
 
-cmd=(
-  python
-  "${PROJECT_ROOT}/scripts/make_video.py"
-  --input-file "${input_file}"
-  --config "${DEFAULT_CONFIG}"
-)
-
-if [[ -d "${storyboard_dir}" ]]; then
-  cmd+=(--storyboard-image-dir "${storyboard_dir}")
-fi
-
-if [[ -f "${prompt_pack_file}" ]]; then
-  cmd+=(--prompt-pack-file "${prompt_pack_file}")
-fi
-
-cmd+=("$@")
-
-printf 'Running:'
-for arg in "${cmd[@]}"; do
-  printf ' %q' "${arg}"
-done
-printf '\n'
-
-"${cmd[@]}"
+python "${PROJECT_ROOT}/scripts/make_video_plus.py" \
+  --input-file "${input_file}" \
+  --config "${DEFAULT_CONFIG}" \
+  --skip-intro-outro \
+  "$@"

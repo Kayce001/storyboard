@@ -156,12 +156,9 @@ wsl.exe sh -lc "<repo-root>/.venv-linux/bin/edge-tts --voice zh-CN-XiaoxiaoNeura
 - Finished or test runs live under `output/runs/`
 - Scratch / reusable generated assets live under `output/workbench/<task_name>/`
 
-## OpenRouter reuse
+## Remote model configuration
 
-The same `OPENROUTER_API_KEY` can now be used for both:
-
-- LLM script cleaning
-- Gemini image generation through the `openrouter_gemini_image` image provider
+Set `OPENAI_API_KEY` when using the default OpenAI-compatible text provider.
 
 Current default:
 

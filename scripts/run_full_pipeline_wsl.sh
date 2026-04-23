@@ -57,12 +57,22 @@ if ! input_file="$(resolve_input_file "${input_arg}")"; then
 fi
 
 cd "${PROJECT_ROOT}"
+if [[ -f "${HOME}/.bashrc" ]]; then
+  source "${HOME}/.bashrc" >/dev/null 2>&1 || true
+fi
 source "${VENV_ACTIVATE}"
-
-if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-  echo "OPENROUTER_API_KEY is not set in this shell." >&2
-  echo "Open a new WSL shell or run: source ~/.profile && source ~/.bashrc" >&2
-  exit 1
+export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+nvidia_libs="$(python - <<'PY'
+try:
+    import nvidia.cublas.lib
+    import nvidia.cudnn.lib
+    print(f"{nvidia.cublas.lib.__path__[0]}:{nvidia.cudnn.lib.__path__[0]}")
+except Exception:
+    print("")
+PY
+)"
+if [[ -n "${nvidia_libs}" ]]; then
+  export LD_LIBRARY_PATH="${nvidia_libs}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 fi
 
 python "${PROJECT_ROOT}/scripts/run_full_pipeline.py" \

@@ -33,7 +33,7 @@ KNOWN_TEXT_REPLACEMENTS = {
     "跳收过": "跳过",
 }
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
-WORKBENCH_DIR = PROJECT_ROOT / "output" / "workbench"
+DEFAULT_WORKBENCH_DIR = PROJECT_ROOT / "output" / "workbench"
 
 import sys
 
@@ -67,6 +67,7 @@ from storyboard_video.infra.files import (  # noqa: E402
 from storyboard_video.infra.fonts import load_font  # noqa: E402
 from storyboard_video.infra.images import render_static_image_clip  # noqa: E402
 from storyboard_video.infra.subtitles import (  # noqa: E402
+    build_faster_whisper_aligned_chunk_ranges,
     format_srt_time,
     split_subtitle_chunks,
     write_srt,
@@ -131,8 +132,8 @@ def infer_workbench_task_name(input_file: Path | None, raw_text: str) -> str:
     return fallback_name
 
 
-def ensure_workbench_task_dir(task_name: str) -> Path:
-    task_dir = WORKBENCH_DIR / task_name
+def ensure_workbench_task_dir(task_name: str, workbench_root: Path | None = None) -> Path:
+    task_dir = (workbench_root or DEFAULT_WORKBENCH_DIR) / task_name
     task_dir.mkdir(parents=True, exist_ok=True)
     return task_dir
 
@@ -946,6 +947,8 @@ def normalize_segment_for_layout(segment: dict, layout_cfg: dict) -> dict:
     normalized = dict(segment)
     normalized["title"] = normalize_delivery_text(str(segment.get("title", "")))
     normalized["text"] = normalize_delivery_text(str(segment.get("text", "")))
+    if "subtitle_text" in segment:
+        normalized["subtitle_text"] = normalize_delivery_text(str(segment.get("subtitle_text", "")))
     for key in ("scene_goal", "shot_type", "style", "prompt_cn", "prompt_en", "image_prompt_zh", "image_prompt_en", "negative_prompt", "post_text_note"):
         if key in segment:
             normalized[key] = normalize_delivery_text(str(segment.get(key, "")))
@@ -962,6 +965,7 @@ def build_storyboard_entry(segment: dict, index: int) -> dict:
         "id": segment.get("id", index + 1),
         "title": segment.get("title", f"段落{index + 1}"),
         "text": segment.get("text", ""),
+        "subtitle_text": segment.get("subtitle_text", ""),
         "screen_text": segment.get("screen_text", ""),
         "screen_text_lines": segment.get("screen_text_lines", []),
         "keywords": segment.get("keywords", []),
@@ -1238,17 +1242,20 @@ def synthesize_segment_audio_pack(
     video_cfg: dict,
     ffprobe_bin: str,
     ffmpeg_bin: str,
-) -> tuple[str, list[float], list[float], list[list[dict]], Path]:
+) -> tuple[str, list[float], list[float], list[list[dict]], list[str], list[Path], Path]:
     pad_sec = float(video_cfg.get("segment_audio_padding_sec", 0.35))
     segment_durations: list[float] = []
     speech_durations: list[float] = []
     sentence_timings_by_segment: list[list[dict]] = []
+    subtitle_texts: list[str] = []
+    segment_audio_paths: list[Path] = []
     concat_tracks: list[Path] = []
     provider_used = ""
 
     for idx, seg in enumerate(segments, start=1):
         text = str(seg.get("text", "")).strip()
         tts_text = sanitize_tts_text(text) if text else ""
+        subtitle_text = str(seg.get("subtitle_text", "")).strip()
         segment_audio = audio_dir / f"segment_{timestamp}_{idx:02d}.mp3"
         timing_json_path = temp_dir / f"segment_timing_{timestamp}_{idx:02d}.json"
         tts_result = synthesize_tts_package(
@@ -1264,6 +1271,8 @@ def synthesize_segment_audio_pack(
         speech_durations.append(audio_dur)
         segment_durations.append(audio_dur + pad_sec)
         sentence_timings_by_segment.append(list(tts_result.get("sentence_timings", [])))
+        subtitle_texts.append(subtitle_text or tts_text or text)
+        segment_audio_paths.append(segment_audio)
         concat_tracks.append(segment_audio)
         if pad_sec > 0:
             silence_audio = temp_dir / f"segment_silence_{timestamp}_{idx:02d}.mp3"
@@ -1272,7 +1281,7 @@ def synthesize_segment_audio_pack(
 
     narration_mp3 = audio_dir / f"narration_{timestamp}.mp3"
     concat_audio_tracks(ffmpeg_bin, concat_tracks, narration_mp3, temp_dir)
-    return provider_used or "unknown", segment_durations, speech_durations, sentence_timings_by_segment, narration_mp3
+    return provider_used or "unknown", segment_durations, speech_durations, sentence_timings_by_segment, subtitle_texts, segment_audio_paths, narration_mp3
 
 
 @dataclass(frozen=True)
@@ -1300,6 +1309,8 @@ class NarrationPlan:
     durations: list[float]
     speech_durations: list[float]
     subtitle_sentence_timings: list[list[dict]]
+    subtitle_texts: list[str]
+    segment_audio_paths: list[Path]
     narration_mp3: Path
     subtitle_alignment_mode: str
 
@@ -1352,7 +1363,7 @@ def normalize_segments_for_prompt_pack(segments: list[dict]) -> list[dict]:
     normalized_segments: list[dict] = []
     for seg in segments:
         normalized_seg = dict(seg)
-        for key in ("title", "text", "screen_text", "scene_goal", "shot_type", "style", "prompt_cn", "prompt_en", "image_prompt_zh", "image_prompt_en", "negative_prompt", "post_text_note"):
+        for key in ("title", "text", "subtitle_text", "screen_text", "scene_goal", "shot_type", "style", "prompt_cn", "prompt_en", "image_prompt_zh", "image_prompt_en", "negative_prompt", "post_text_note"):
             if key in normalized_seg:
                 normalized_seg[key] = normalize_delivery_text(str(normalized_seg.get(key, "")))
         for key in ("must_show", "avoid", "text_in_image", "keywords"):
@@ -1379,7 +1390,7 @@ def build_narration_plan(
     tts_script: str,
 ) -> NarrationPlan:
     if storyboard_mode:
-        tts_used, durations, speech_durations, subtitle_sentence_timings, narration_mp3 = synthesize_segment_audio_pack(
+        tts_used, durations, speech_durations, subtitle_sentence_timings, subtitle_texts, segment_audio_paths, narration_mp3 = synthesize_segment_audio_pack(
             segments=segments,
             audio_dir=audio_dir,
             temp_dir=temp_dir,
@@ -1395,6 +1406,8 @@ def build_narration_plan(
             durations=durations,
             speech_durations=speech_durations,
             subtitle_sentence_timings=subtitle_sentence_timings,
+            subtitle_texts=subtitle_texts,
+            segment_audio_paths=segment_audio_paths,
             narration_mp3=narration_mp3,
             subtitle_alignment_mode=subtitle_alignment_mode,
         )
@@ -1404,11 +1417,17 @@ def build_narration_plan(
     total_audio_sec = ffprobe_duration(narration_mp3, ffprobe_bin)
     min_seg_sec = float(video_cfg.get("min_segment_sec", 3.0))
     durations = allocate_durations(segments, total_audio_sec, min_seg_sec)
+    subtitle_texts = [
+        sanitize_tts_text(str(seg.get("text", "")).strip()) or str(seg.get("text", "")).strip()
+        for seg in segments
+    ]
     return NarrationPlan(
         tts_used=tts_used,
         durations=durations,
         speech_durations=durations[:],
         subtitle_sentence_timings=[],
+        subtitle_texts=subtitle_texts,
+        segment_audio_paths=[],
         narration_mp3=narration_mp3,
         subtitle_alignment_mode="speech_window_only",
     )
@@ -1471,7 +1490,11 @@ def build_av_clips(
     height: int,
     fps: int,
     outro_pad_sec: float,
+    include_intro_outro: bool = True,
 ) -> list[Path]:
+    if not include_intro_outro:
+        return [body_video]
+
     av_clips: list[Path] = []
     if intro_clip_asset and intro_audio_asset:
         padded_intro = temp_dir / f"intro_padded_{timestamp}.mp3"
@@ -1529,6 +1552,7 @@ def build_run_summary_payload(
     bgm_source: Path | None,
     bgm_rendered_audio: Path | None,
     reusable_assets: ReusableAssetBundle,
+    include_intro_outro: bool,
     storyboard_image_dir: Path | None,
     cleaned_script_path: Path,
     tts_script_path: Path,
@@ -1554,11 +1578,12 @@ def build_run_summary_payload(
         "layout_style": cfg.get("layout", {}).get("style", "storyboard_panel"),
         "bgm_source": str(bgm_source) if bgm_source else "",
         "bgm_rendered_audio": str(bgm_rendered_audio) if bgm_rendered_audio else "",
+        "include_intro_outro": include_intro_outro,
         "reusable_assets": {
-            "intro_video": str(reusable_assets.intro_clip_asset) if reusable_assets.intro_clip_asset else "",
-            "intro_audio": str(reusable_assets.intro_audio_asset) if reusable_assets.intro_audio_asset else "",
-            "outro_video": str(reusable_assets.outro_clip_asset) if reusable_assets.outro_clip_asset else "",
-            "outro_audio": str(reusable_assets.outro_audio_asset) if reusable_assets.outro_audio_asset else "",
+            "intro_video": str(reusable_assets.intro_clip_asset) if include_intro_outro and reusable_assets.intro_clip_asset else "",
+            "intro_audio": str(reusable_assets.intro_audio_asset) if include_intro_outro and reusable_assets.intro_audio_asset else "",
+            "outro_video": str(reusable_assets.outro_clip_asset) if include_intro_outro and reusable_assets.outro_clip_asset else "",
+            "outro_audio": str(reusable_assets.outro_audio_asset) if include_intro_outro and reusable_assets.outro_audio_asset else "",
         },
         "storyboard_image_dir": str(storyboard_image_dir) if storyboard_image_dir else "",
         "outputs": {
@@ -1582,16 +1607,24 @@ def main() -> None:
     parser.add_argument("--text", type=str, default="", help="Raw text directly")
     parser.add_argument("--config", type=str, required=True, help="Provider config json path")
     parser.add_argument("--output-dir", type=str, default="", help="Output directory. Defaults to output/runs/<input_file_stem>")
+    parser.add_argument(
+        "--workbench-root",
+        type=str,
+        default=str(DEFAULT_WORKBENCH_DIR),
+        help="Workbench root directory. Defaults to output/workbench",
+    )
     parser.add_argument("--llm-result-file", type=str, default="", help="Precomputed llm result JSON path")
     parser.add_argument("--force-local-clean", action="store_true", help="Require local precomputed clean result and skip remote LLM")
     parser.add_argument("--reuse-existing-images", action="store_true", help="Skip image generation if segment image already exists")
     parser.add_argument("--subtitle-mode", type=str, default="", choices=["", "none", "mov_text", "burn"], help="Subtitle render mode")
     parser.add_argument("--storyboard-image-dir", type=str, default="", help="Directory containing ordered storyboard images like 1.jpg, 2.jpg")
     parser.add_argument("--prompt-pack-file", type=str, default="", help="Optional Nano Banana prompt pack markdown used to extract exact post text notes")
+    parser.add_argument("--skip-intro-outro", action="store_true", help="Render body-only video without reusable intro/outro clips")
     args = parser.parse_args()
 
     ffmpeg_bin, ffprobe_bin = detect_ffmpeg_bins()
     config_path = Path(args.config).resolve()
+    workbench_root = Path(args.workbench_root).resolve()
     input_file = Path(args.input_file).resolve() if args.input_file else None
     llm_result_file = Path(args.llm_result_file).resolve() if args.llm_result_file else None
     explicit_storyboard_dir = Path(args.storyboard_image_dir).resolve() if args.storyboard_image_dir else None
@@ -1731,7 +1764,7 @@ def main() -> None:
     final_mp4 = output_dir / f"final_{timestamp}.mp4"
     run_summary_path = output_dir / f"run_summary_{timestamp}.json"
     workbench_task_name = infer_workbench_task_name(input_file, raw_text)
-    workbench_task_dir = ensure_workbench_task_dir(workbench_task_name)
+    workbench_task_dir = ensure_workbench_task_dir(workbench_task_name, workbench_root=workbench_root)
     prompt_pack_path = workbench_task_dir / "prompt_pack.md"
     prompt_pack_json_path = workbench_task_dir / "prompt_pack.json"
 
@@ -1778,6 +1811,8 @@ def main() -> None:
     durations = narration_plan.durations
     speech_durations = narration_plan.speech_durations
     subtitle_sentence_timings = narration_plan.subtitle_sentence_timings
+    subtitle_texts = narration_plan.subtitle_texts
+    segment_audio_paths = narration_plan.segment_audio_paths
     narration_mp3 = narration_plan.narration_mp3
     subtitle_alignment_mode = narration_plan.subtitle_alignment_mode
 
@@ -1796,12 +1831,29 @@ def main() -> None:
 
     body_audio_sec = ffprobe_duration(narration_mp3, ffprobe_bin)
     subtitle_segments = segments
+    aligned_chunk_ranges = None
+    if storyboard_mode and segment_audio_paths:
+        aligned_chunk_ranges, aligned_segment_count = build_faster_whisper_aligned_chunk_ranges(
+            segment_audio_paths=segment_audio_paths,
+            durations=durations,
+            subtitle_texts=subtitle_texts,
+            speech_durations=speech_durations,
+            sentence_timings=subtitle_sentence_timings,
+            start_offset_sec=0.0,
+        )
+        if aligned_chunk_ranges:
+            if aligned_segment_count == len(segment_audio_paths):
+                subtitle_alignment_mode = "faster_whisper_word_timestamps"
+            elif aligned_segment_count > 0:
+                subtitle_alignment_mode = "faster_whisper_word_timestamps_fallback"
     write_srt(
         subtitle_segments,
         durations,
         subtitles_srt,
         speech_durations=speech_durations,
         sentence_timings=subtitle_sentence_timings,
+        subtitle_texts=subtitle_texts,
+        aligned_chunk_ranges=aligned_chunk_ranges,
         start_offset_sec=0.0,
     )
 
@@ -1870,6 +1922,7 @@ def main() -> None:
         height=height,
         fps=fps,
         outro_pad_sec=outro_pad_sec,
+        include_intro_outro=not args.skip_intro_outro,
     )
 
     assembled_video = video_dir / f"assembled_{timestamp}.mp4"
@@ -1905,6 +1958,7 @@ def main() -> None:
         bgm_source=bgm_source,
         bgm_rendered_audio=bgm_rendered_audio,
         reusable_assets=reusable_assets,
+        include_intro_outro=not args.skip_intro_outro,
         storyboard_image_dir=storyboard_image_dir,
         cleaned_script_path=cleaned_script_path,
         tts_script_path=tts_script_path,

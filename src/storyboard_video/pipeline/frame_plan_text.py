@@ -7,6 +7,7 @@ from .prompt_pack_text import _normalize_text
 
 
 SOURCE_REF_RE = re.compile(r"\[(?:[A-Za-z]+\d+|\d+)\]")
+MARKDOWN_SEPARATOR_RE = re.compile(r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
 
 
 def _strip_source_refs(text: str) -> str:
@@ -19,6 +20,10 @@ def normalize_source_text(raw_text: str) -> str:
     return "\n".join(normalized_lines).strip()
 
 
+def _is_markdown_separator_line(text: str) -> bool:
+    return bool(MARKDOWN_SEPARATOR_RE.fullmatch(str(text or "").strip()))
+
+
 def split_question_and_body_lines(raw_text: str) -> tuple[str, list[dict]]:
     normalized_text = normalize_source_text(raw_text)
     question = ""
@@ -28,6 +33,8 @@ def split_question_and_body_lines(raw_text: str) -> tuple[str, list[dict]]:
     for raw_line in normalized_text.split("\n"):
         line = _normalize_text(raw_line)
         if not line:
+            continue
+        if _is_markdown_separator_line(line):
             continue
         if not question:
             question = line
@@ -160,7 +167,7 @@ def build_segments_from_frames(question: str, line_refs: list[dict], frames: lis
     segments = [build_question_segment(question)]
     for index, frame in enumerate(frames, start=2):
         segment = build_segment_from_frame(frame, line_refs, segment_id=index)
-        if segment["text"]:
+        if segment["text"] and not _is_markdown_separator_line(segment["text"]):
             segments.append(segment)
     return segments
 

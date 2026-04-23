@@ -1,3 +1,4 @@
+import random
 from pathlib import Path
 
 from mutagen.mp3 import MP3
@@ -86,7 +87,8 @@ def resolve_bgm_track(project_dir: Path) -> Path | None:
             if p.is_file() and p.suffix.lower() in {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
         ]
         if candidates:
-            return sorted(candidates, key=natural_sort_key)[0]
+            ordered = sorted(candidates, key=natural_sort_key)
+            return random.choice(ordered)
     return None
 
 

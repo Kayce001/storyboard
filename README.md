@@ -11,7 +11,7 @@
 
 ## 推荐环境
 
-当前推荐运行环境是 **Ubuntu + `.venv-linux`**。在 Windows 上，推荐使用 **WSL Ubuntu**。
+当前推荐运行环境是 **Ubuntu + `.venv-linux`**。如果在 Windows 机器上使用，建议仍然进入 Ubuntu 环境运行项目命令。
 
 ```bash
 cd /path/to/storyboard
@@ -29,8 +29,8 @@ python -m pip install -r requirements.storyboard.txt
 
 当前常用环境变量：
 
-- `OPENROUTER_API_KEY`
-  Used by the default text generation path and OpenRouter image generation.
+- `OPENAI_API_KEY`
+  文本模型调用使用的 API Key。具体模型、地址和 provider 顺序由 `config/providers.json` 控制。
 
 如果你在 Ubuntu 终端里刚打开终端就提示 key 没配置，先执行：
 
@@ -115,6 +115,49 @@ bash scripts/run_full_pipeline_wsl.sh 4
   用于在已有分镜图的前提下生成视频
 - `run_full_pipeline_wsl.sh`
   用于端到端自动跑完整链路
+
+脚本文件名里保留了 `_wsl.sh` 的历史命名，但使用方式按 Ubuntu 命令理解即可。
+
+## Plus 增强链路
+
+如果希望图片提示词和口播更适合短视频，优先使用 plus 链路。它不改原有 `tasks/` 主路径，而是使用独立目录：
+
+```text
+tasks_plus/<任务名>/<任务名>.txt
+tasks_plus/<任务名>/1.png
+tasks_plus/<任务名>/2.png
+...
+output/workbench_plus/<任务名>/
+output/runs_plus/<任务名>/
+```
+
+推荐流程：
+
+1. 把原始文稿放到 `tasks_plus/<任务名>/<任务名>.txt`。
+2. 生成 plus 提示词包。
+3. 根据 `output/workbench_plus/<任务名>/image_prompt_pack.md` 生图。
+4. 把图片放回 `tasks_plus/<任务名>/`，命名为 `1.png`、`2.png`、`3.png`。
+5. 生成视频。
+
+常用命令：
+
+```bash
+bash scripts/run_prompt_pack_plus_wsl.sh 11 --task-name 11
+bash scripts/run_make_video_plus_wsl.sh 11
+```
+
+如果只想生成正文部分，不拼接片头片尾：
+
+```bash
+bash scripts/run_make_video_plus_body_only_wsl.sh 11
+```
+
+plus 链路会在原始分段之后额外做两步：
+
+- 优化生图提示词，让每张图有更明确的视觉任务、停留点和构图方向。
+- 优化口播内容，让语音更像短视频讲解，而不是直接朗读原始 txt。
+
+生图提示词仍然保持简洁，统一只补必要的 16:9、安全区、中文准确性约束；不会在每张图后面追加很长的固定尾巴。
 
 ## 三条 Python 脚本
 
@@ -261,7 +304,7 @@ output/workbench/<任务名>/auto_storyboard/<timestamp>/
 
 ### 如果你想手工审图、控质量
 
-按这条：
+原始主路径按这条：
 
 1. 运行 `run_prompt_pack_wsl.sh`
 2. 审阅 `output/workbench/<任务名>/prompt_pack.md`
@@ -273,6 +316,13 @@ output/workbench/<任务名>/auto_storyboard/<timestamp>/
 ```bash
 bash scripts/run_prompt_pack_wsl.sh 4
 bash scripts/run_make_video_wsl.sh 4
+```
+
+更推荐的增强路径是 plus：
+
+```bash
+bash scripts/run_prompt_pack_plus_wsl.sh 4 --task-name 4
+bash scripts/run_make_video_plus_wsl.sh 4
 ```
 
 ### 如果你想一键跑到底
@@ -299,6 +349,8 @@ bash scripts/run_full_pipeline_wsl.sh 4
   片头片尾、BGM 等可复用资源
 - `tasks/`
   真实任务输入区
+- `tasks_plus/`
+  plus 增强链路的任务文本和人工放图目录
 
 ### 协作辅助目录
 
@@ -311,12 +363,15 @@ bash scripts/run_full_pipeline_wsl.sh 4
 
 - `output/workbench/<任务名>/prompt_pack.md`
 - `output/workbench/<任务名>/prompt_pack.json`
+- `output/workbench_plus/<任务名>/image_prompt_pack.md`
+- `output/workbench_plus/<任务名>/narration_script.txt`
 
 这是当前任务的正式中间产物，建议把它当作“可审阅分镜稿”来看。
 
 ### 历史运行记录
 
 - `output/runs/<任务名>/`
+- `output/runs_plus/<任务名>/`
 
 这里保存的是：
 
@@ -345,6 +400,7 @@ config/providers.json
 - `image.auto_generate_enabled = false`
   默认关闭自动生图
 - 自动生图由 `run_full_pipeline.py` 临时打开
+- 文本模型由 `config/providers.json` 控制，README 不记录任何私有转发链路细节
 - `prompt_pack.parallel_frame_writer.enabled = false`
   并发单图 writer 代码保留，但默认关闭
 - TTS provider 默认顺序仍然是：

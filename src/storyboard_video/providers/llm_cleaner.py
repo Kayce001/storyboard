@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import subprocess
 import time
 import urllib.request
 from pathlib import Path
@@ -83,7 +84,43 @@ def _extract_text_from_response(body: dict) -> str:
     raise RuntimeError(f"Unsupported or empty LLM response format: {json.dumps(body, ensure_ascii=False)[:500]}")
 
 
-def _post_json(url: str, payload: dict, api_key: str, anthropic: bool) -> dict:
+def _post_json_via_windows_curl(url: str, payload: dict, api_key: str, anthropic: bool) -> dict:
+    headers = [
+        "-H",
+        "Content-Type: application/json",
+        "-H",
+        f"Authorization: Bearer {api_key}",
+        "-H",
+        f"x-api-key: {api_key}",
+    ]
+    if anthropic:
+        headers.extend(["-H", "anthropic-version: 2023-06-01"])
+
+    command = [
+        "curl.exe",
+        "-sS",
+        url,
+        *headers,
+        "--data-binary",
+        "@-",
+    ]
+    result = subprocess.run(
+        command,
+        input=json.dumps(payload).encode("utf-8"),
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"curl.exe failed with exit code {result.returncode}: {stderr}")
+    return json.loads(result.stdout.decode("utf-8"))
+
+
+def _post_json(url: str, payload: dict, api_key: str, anthropic: bool, transport: str = "") -> dict:
+    if transport == "windows_curl":
+        return _post_json_via_windows_curl(url, payload, api_key, anthropic)
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
@@ -116,11 +153,12 @@ def _post_json_with_retry(
     api_key: str,
     anthropic: bool,
     retries: int = 3,
+    transport: str = "",
 ) -> dict:
     last_error = None
     for i in range(retries):
         try:
-            return _post_json(url, payload, api_key, anthropic)
+            return _post_json(url, payload, api_key, anthropic, transport=transport)
         except Exception as exc:
             last_error = exc
             if i < retries - 1:
@@ -322,6 +360,7 @@ def _normalize_clean_segments(segments: object) -> list[dict]:
 
 def complete_json_prompt(user_prompt: str, config: dict) -> dict:
     provider, base_url, api_key, models, api_style = _resolve_llm_provider(config)
+    transport = str(provider.get("transport", "")).strip().lower()
     failures: list[str] = []
 
     for model in models:
@@ -339,6 +378,7 @@ def complete_json_prompt(user_prompt: str, config: dict) -> dict:
                     api_key,
                     anthropic=True,
                     retries=3,
+                    transport=transport,
                 )
                 try:
                     result_text = _extract_text_from_response(body)
@@ -355,6 +395,7 @@ def complete_json_prompt(user_prompt: str, config: dict) -> dict:
                         api_key,
                         anthropic=False,
                         retries=2,
+                        transport=transport,
                     )
                     result_text = _extract_text_from_response(body)
             else:
@@ -370,6 +411,7 @@ def complete_json_prompt(user_prompt: str, config: dict) -> dict:
                     api_key,
                     anthropic=False,
                     retries=3,
+                    transport=transport,
                 )
                 result_text = _extract_text_from_response(body)
 

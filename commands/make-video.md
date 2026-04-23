@@ -34,10 +34,10 @@ allowed-tools: [Read, Write, Edit, Glob, Grep, Bash]
 
 ## 环境变量
 
-如启用 OpenRouter 文稿清洗，请先设置：
+如启用远程文本模型，请先设置：
 
 ```powershell
-$env:OPENROUTER_API_KEY="your_key_here"
+$env:OPENAI_API_KEY="your_key_here"
 ```
 
 ## 运行命令

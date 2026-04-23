@@ -1,14 +1,11 @@
 {
   "llm": {
-    "provider_order": ["openrouter"],
-    "openrouter": {
+    "provider_order": ["openai_compatible"],
+    "openai_compatible": {
       "api_style": "openai",
-      "base_url": "https://openrouter.ai/api",
-      "api_key_env": "OPENROUTER_API_KEY",
-      "model": "openai/gpt-5.2",
-      "fallback_models": [
-        "deepseek/deepseek-chat-v3-0324"
-      ],
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "model": "gpt-5.2",
       "max_tokens": 8000,
       "temperature": 0.2
     }
@@ -35,17 +32,7 @@
   },
   "image": {
     "auto_generate_enabled": false,
-    "provider_order": ["openrouter_gemini_image", "pollinations", "local_placeholder"],
-    "openrouter_gemini_image": {
-      "base_url": "https://openrouter.ai/api/v1",
-      "api_key_env": "OPENROUTER_API_KEY",
-      "model": "google/gemini-2.5-flash-image",
-      "aspect_ratio": "16:9",
-      "max_tokens": 2048,
-      "retries": 3,
-      "prompt_prefix": "Create a clean storyboard frame for a knowledge explainer video.",
-      "prompt_suffix": "Prefer a teaching illustration, whiteboard-style explainer scene, or structured visual diagram instead of a poster, cover art, or promo image. No title cards, no readable text, no watermarks, no logos, no fake interface text. Do not turn metaphors into literal toys or mascots unless the prompt explicitly requires that."
-    },
+    "provider_order": ["pollinations", "local_placeholder"],
     "pollinations": {
       "width": 1280,
       "height": 720,
